@@ -13,6 +13,9 @@ const app: Application = express();
 // Security & parsing middlewares
 app.use(helmet());
 app.use(cors());
+// Stripe webhook needs the raw body for signature verification —
+// this parser must run before express.json() for that exact path.
+app.use('/api/v1/payments/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json());
 app.use(cookieParser());
 app.use(morgan('dev'));
