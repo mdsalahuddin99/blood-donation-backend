@@ -156,9 +156,124 @@ const logout = async (token: string | undefined) => {
   }
 };
 
+// ---- Google social login (GCP OAuth) ----
+// Activates automatically once GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET /
+// GOOGLE_CALLBACK_URL are set in .env (see the OAuth client guide).
+
+const assertGoogleConfigured = () => {
+  if (
+    !config.google.clientId ||
+    !config.google.clientSecret ||
+    !config.google.callbackUrl
+  ) {
+    throw new AppError(
+      503,
+      'Google login is not configured (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET missing)',
+    );
+  }
+};
+
+const getGoogleAuthUrl = (): string => {
+  assertGoogleConfigured();
+  const params = new URLSearchParams({
+    client_id: config.google.clientId as string,
+    redirect_uri: config.google.callbackUrl as string,
+    response_type: 'code',
+    scope: 'openid email profile',
+    access_type: 'offline',
+    prompt: 'consent',
+  });
+  return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+};
+
+type TGoogleProfile = {
+  sub: string;
+  email: string;
+  name: string;
+  email_verified?: boolean;
+};
+
+const handleGoogleCallback = async (code: string | undefined) => {
+  assertGoogleConfigured();
+  if (!code) {
+    throw new AppError(400, 'Google authorization code is missing');
+  }
+
+  const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      code,
+      client_id: config.google.clientId as string,
+      client_secret: config.google.clientSecret as string,
+      redirect_uri: config.google.callbackUrl as string,
+      grant_type: 'authorization_code',
+    }),
+  });
+  if (!tokenResponse.ok) {
+    throw new AppError(401, 'Google token exchange failed');
+  }
+  const tokenData = (await tokenResponse.json()) as {
+    access_token: string;
+  };
+
+  const profileResponse = await fetch(
+    'https://www.googleapis.com/oauth2/v3/userinfo',
+    { headers: { Authorization: `Bearer ${tokenData.access_token}` } },
+  );
+  if (!profileResponse.ok) {
+    throw new AppError(401, 'Could not fetch the Google profile');
+  }
+  const profile = (await profileResponse.json()) as TGoogleProfile;
+
+  let user = await prisma.user.findFirst({
+    where: {
+      OR: [{ googleId: profile.sub }, { email: profile.email }],
+      deletedAt: null,
+    },
+  });
+
+  if (user && !user.googleId) {
+    user = await prisma.user.update({
+      where: { id: user.id },
+      data: { googleId: profile.sub },
+    });
+  }
+
+  if (!user) {
+    // New Google accounts start as DONOR; a hospital can be upgraded by
+    // an admin (PATCH /admin/users/:id) after registration.
+    user = await prisma.user.create({
+      data: {
+        name: profile.name || profile.email.split('@')[0],
+        email: profile.email,
+        googleId: profile.sub,
+        role: Role.DONOR,
+      },
+    });
+  }
+
+  if (!user.isActive) {
+    throw new AppError(403, 'This account is blocked');
+  }
+
+  const tokens = await issueTokens(user);
+  return {
+    ...tokens,
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+    },
+  };
+};
+
 export const AuthService = {
   register,
   login,
   refreshToken,
   logout,
+  getGoogleAuthUrl,
+  handleGoogleCallback,
 };

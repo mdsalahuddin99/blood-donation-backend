@@ -55,9 +55,28 @@ const logout = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const googleLogin = catchAsync(async (req: Request, res: Response) => {
+  const url = AuthService.getGoogleAuthUrl();
+  res.redirect(url);
+});
+
+const googleCallback = catchAsync(async (req: Request, res: Response) => {
+  const code = req.query.code as string | undefined;
+  const result = await AuthService.handleGoogleCallback(code);
+  res.cookie('refreshToken', result.refreshToken, REFRESH_COOKIE_OPTIONS);
+  sendResponse(res, {
+    statusCode: 200,
+    success: true,
+    message: 'Logged in with Google successfully',
+    data: { accessToken: result.accessToken, user: result.user },
+  });
+});
+
 export const AuthController = {
   register,
   login,
   refreshToken,
   logout,
+  googleLogin,
+  googleCallback,
 };
