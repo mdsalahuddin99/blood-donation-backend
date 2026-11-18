@@ -64,7 +64,19 @@ npm run dev        # tsx watch src/server.ts
 
 Base URL: `/api/v1` · All responses follow `{ success, message, data }` / `{ success: false, message, errors: [] }`.
 
-27 endpoints across Auth, Users/Profile, Donor Search, Blood Requests, Donations, Notifications, Payments and Admin — built day by day (Day 2: Auth & core APIs, Day 3: business logic, Day 4: payments & Postman docs, Day 5: deployment & video).
+**37 endpoints** — full Postman collection: [`docs/postman_collection.json`](docs/postman_collection.json) (import it, set `baseUrl` + `accessToken`).
+
+| Area | Endpoints |
+|---|---|
+| Auth | register, login, refresh-token, logout, Google login + callback |
+| Users | `GET/PATCH /users/me` |
+| Donors | profile upsert, availability toggle, search (filters + pagination), get by id |
+| Hospitals | profile create/update, my profile |
+| Blood Requests | create, list (filter/sort/pagination), details, my-requests, update, soft delete, matching donors, respond, confirm donation (transaction) |
+| Donations | my donation history |
+| Notifications | list (unread count), mark as read |
+| Payments | Stripe initiate (emergency broadcast), webhook, success/cancel, my payments, get by id |
+| Admin | user list/update, verify hospital, verify blood request, dashboard stats, audit logs |
 
 ## Deployment
 
