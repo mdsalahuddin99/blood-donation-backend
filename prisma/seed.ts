@@ -91,6 +91,38 @@ async function main() {
     });
   }
 
+  // One OPEN blood request from the seeded hospital, so donor respond /
+  // matching flows can be tested immediately (admin verification flow
+  // itself is exercised with newly created PENDING requests).
+  const hospitalProfile = await prisma.hospitalProfile.findUnique({
+    where: { userId: hospitalUser.id },
+  });
+  if (hospitalProfile) {
+    const existingRequest = await prisma.bloodRequest.findFirst({
+      where: {
+        hospitalId: hospitalProfile.id,
+        patientName: 'Sample Patient (Seed)',
+      },
+    });
+    if (!existingRequest) {
+      await prisma.bloodRequest.create({
+        data: {
+          hospitalId: hospitalProfile.id,
+          patientName: 'Sample Patient (Seed)',
+          bloodGroup: 'A_POSITIVE',
+          unitsNeeded: 2,
+          district: 'Dhaka',
+          hospitalAddress: 'Secretariat Road, Dhaka 1000',
+          urgency: 'URGENT',
+          neededBy: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
+          reason: 'Seeded open request for API testing',
+          contactPhone: '+8801800000000',
+          status: 'OPEN',
+        },
+      });
+    }
+  }
+
   console.log('Seed complete:', {
     admin: admin.email,
     hospital: hospitalUser.email,
